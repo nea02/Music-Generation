@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Generation with Feedback</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-image: url('static/bg_image.jpg');
+            background-size: cover;
+            background-position: center;
+        }
+
+        .container {
+            text-align: center;
+        }
+
+        select {
+            padding: 10px;
+            font-size: 16px;
+            border-radius: 5px;
+            /* Background color for the dropdown menu */
+            background-color: #D2B48C;
+            /* Light pastel brown */
+        }
+
+        option {
+            /* Background color for dropdown options */
+            background-color: #D2B48C;
+            /* Light pastel brown */
+        }
+
+        button {
+            /* margin-top: 10px; */
+            /* margin-right: 10px; */
+            padding: 10px 20px;
+            font-size: 18px;
+            border-radius: 5px;
+            background-color: #964B00;
+            /* Brown color */
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        .download-button {
+            padding: 10px 20px;
+            font-size: 18px;
+            border-radius: 5px;
+            background-color: #964B00;
+            /* Brown color */
+            color: #fff;
+            border: none;
+            cursor: pointer;
+        }
+
+        .feedback {
+            font-size: 20px;
+            /* Larger font size for feedback questions */
+            margin-bottom: 20px;
+            /* Add margin below each feedback question */
+        }
+
+        #pause_btn {
+            display: none;
+        }
+
+        .btn_grp {
+            display: flex;
+            gap: 5px;
+        }
+
+        .prompt {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        #stats {
+            display: none;
+            flex-direction: column;
+        }
+
+        .stats {
+            display: flex;
+            /* flex-direction: column; */
+            gap: 10px;
+            align-items: center;
+        }
+
+        .stat-field {
+            display: flex;
+            gap: 5px;
+        }
+
+        .stat-field p:nth-of-type(2) {
+            font-weight: bold;
+        }
+
+        .generate_loading {
+            opacity: 0.5;
+            cursor: not-allowed;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>CHOOSE YOUR ARTIST</h1>
+        <div class="prompt">
+            <div>
+                <label for="musician_name">Select Musician:</label>
+                <select id="musician_name">
+                    <option value="Haydn">Haydn</option>
+                    <option value="Beethoven">Beethoven</option>
+                    <option value="Chopin">Chopin</option>
+                    <option value="Liszt">Liszt</option>
+                    <option value="Chopin_Beeth">Chopin_Beeth</option>
+                </select>
+            </div>
+            <div class="btn_grp">
+                <button onclick="generateMusic()" id="regen_btn">Generate Music</button>
+                <button class="generate_loading" id="generate_loading">Generating....</button>
+                <button id="downloadBtn" class="download-button" style="display:none;"
+                    onclick="downloadMusic()">Download</button>
+                <button onclick="pauseMusic()" id="pause_btn">Pause</button>
+            </div>
+        </div>
+        <br>
+
+    </div>
+
+    <div id="feedbackSection" style="display:none;">
+        <h2 class="feedback">Feedback Questions</h2>
+        <label class="feedback" for="qualityInput">Rate the quality of the music (out of 5): </label>
+        <input type="number" id="qualityInput" min="1" max="5"><br><br>
+        <label class="feedback" for="creativityInput">Rate the creativity of the music (out of 5): </label>
+        <input type="number" id="creativityInput" min="1" max="5"><br><br>
+        <label class="feedback" for="enjoymentInput">Rate the overall enjoyment of the music (out of 5): </label>
+        <input type="number" id="enjoymentInput" min="1" max="5"><br><br>
+        <button id="submitFeedbackBtn" onclick="submitFeedback()">Submit Feedback</button>
+    </div>
+    <div id="stats">
+        <div class="stats">
+            <h2 class="feedback">Statistics</h2>
+            <div class="stat-field">
+                <p>Quality: </p>
+                <p id="qualityRating">10</p>
+            </div>
+            <div class="stat-field">
+                <p>Creativity: </p>
+                <p id="creativityRating"></p>
+            </div>
+            <div class="stat-field">
+                <p>Enjoyment: </p>
+                <p id="enjoymentRating"></p>
+            </div>
+            <div class="stat-field">
+                <p>Average: </p>
+                <p id="averageRating"></p>
+            </div>
+        </div>
+        <p id="result_text"></p>
+    </div>
+    <script type='text/javascript' src='//www.midijs.net/lib/midi.js'></script>
+
+    <script>
+        let isPlaying = false
+        let duration = 0
+        let possitive_rating = false
+        const midi_file = 'static/output.mid'
+        let pause_btn = document.getElementById("pause_btn")
+        let regen_btn = document.getElementById("regen_btn")
+        let stats_box = document.getElementById("stats")
+        let result_text = document.getElementById("result_text")
+        let donwload_btn = document.getElementById("downloadBtn")
+        let loading = document.getElementById("generate_loading")
+
+        function generateMusic() {
+            showLoading()
+            var selectedMusician = document.getElementById("musician_name").value;
+            console.log("Generating music for " + selectedMusician);
+            fetch('/generate_music', { method: 'POST', body: JSON.stringify({ musician: selectedMusician }), headers: { 'content-type': 'application/json' } })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById("feedbackSection").style.display = "block";
+                    hideStatsView()
+                    hideRegenView()
+                    hideDownloadView()
+                    hideLoading()
+                    playGeneratedMusic()
+                    console.log(data);
+                })
+                .catch(error => {
+                    console.error('Error:', error)
+                    hideLoading()
+                    alert('An error occured. PLease try again')
+                });
+
+            // // Show feedback section
+        }
+
+        function playGeneratedMusic() {
+            MIDIjs.play(midi_file);
+            duration = MIDIjs.get_duration(midi_file)
+            isPlaying = true
+            pause_btn.style.display = 'block'
+            pause_btn.innerText = 'Pause'
+
+            setTimeout(() => {
+                pause_btn.style.display = 'hidden'
+            }, duration)
+        }
+
+        function pauseMusic() {
+            if (isPlaying) {
+                pause_btn.innerText = 'Resume'
+                MIDIjs.pause()
+                isPlaying = false
+            } else {
+                pause_btn.innerText = 'Pause'
+                MIDIjs.resume()
+                isPlaying = true
+            }
+        }
+
+        function regenView() {
+            pause_btn.style.display = 'none'
+            regen_btn.innerText = "Regenerate Music"
+        }
+
+        function hideRegenView() {
+            regen_btn.innerText = "Generate Music"
+        }
+
+        function statsView() {
+            stats_box.style.display = 'flex'
+        }
+
+        function hideStatsView() {
+            stats_box.style.display = 'none'
+        }
+
+        function downloadView() {
+            donwload_btn.style.display = "block"
+        }
+
+        function hideDownloadView() {
+            donwload_btn.style.display = "none"
+        }
+
+        function showLoading(){
+            regen_btn.style.display = 'none'
+            loading.style.display = 'block'
+        }
+
+        function hideLoading(){
+            regen_btn.style.display = 'block'
+            loading.style.display = 'none'
+        }
+
+        function downloadMusic() {
+            fetch(midi_file)
+                .then(response => response.blob())
+                .then(blob => {
+                    // Create a URL for the Blob
+                    var url = URL.createObjectURL(blob);
+
+                    // Create a download link
+                    var a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'output.mid'; // Set the filename for the downloaded MIDI file
+                    a.textContent = 'Download MIDI'; // Text for the download link
+
+                    // Programmatically trigger the click event on the download link
+                    a.click();
+
+                    // Clean up by revoking the URL
+                    URL.revokeObjectURL(url);
+                    hideDownloadView()
+                    document.getElementById("feedbackSection").style.display = "none";
+                    pause_btn.style.display = "none"
+                    pauseMusic()
+                    hideStatsView()
+                })
+                .catch(error => console.error('Error downloading MIDI file:', error));
+        }
+
+
+        function submitFeedback() {
+            const res = {
+                qualityRating: parseInt(document.getElementById("qualityInput").value),
+                creativityRating: parseInt(document.getElementById("creativityInput").value),
+                enjoymentRating: parseInt(document.getElementById("enjoymentInput").value),
+            }
+
+            const invalidData = Object.values(res).some(val => {
+                return val < 1 || val > 5
+            })
+            if (invalidData) return alert("Enter rating between 1 and 5")
+
+            res['averageRating'] = (res.qualityRating + res.creativityRating + res.enjoymentRating) / 3;
+
+            Object.keys(res).map(key => {
+                let elem = document.getElementById(key)
+                elem.innerText = res[key]
+            })
+            console.log(res);
+
+            statsView()
+            if (res.averageRating < 2.5) {
+                regenView()
+                result_text.innerText = 'You average rating is below 2.5. Please regenerate the music'
+                result_text.style.color = 'red'
+            } else {
+                downloadView()
+                result_text.innerText = 'You average rating is above 2.5. You can download the music'
+                result_text.style.color = 'green'
+            }
+        }
+
+    </script>
+</body>
+
+</html>
